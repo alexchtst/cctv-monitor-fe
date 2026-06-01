@@ -1,14 +1,17 @@
-import { predictionEvents } from "../dummy-data";
+import { getBackendSnapshot, newestEvents } from "../api-client";
 import { AppShell, Icon } from "../ui";
 
-export default function ViolationsPage() {
+export default async function ViolationsPage() {
+  const { events } = await getBackendSnapshot();
+  const visibleEvents = newestEvents(events, 100);
+
   return (
     <AppShell active="Violation Logs" searchPlaceholder="Cari log pelanggaran...">
       <div className="screen-heading">
         <div>
           <p className="breadcrumb-lite">Violation Logs</p>
           <h1>Log Pelanggaran K3</h1>
-          <span>Daftar dummy dari output prediksi AI dan status notifikasi.</span>
+          <span>Daftar output prediksi AI dan status notifikasi dari backend.</span>
         </div>
         <button className="brown-button"><Icon name="download" /> EXPORT CSV</button>
       </div>
@@ -23,7 +26,7 @@ export default function ViolationsPage() {
       <section className="panel table-panel">
         <div className="table-header">
           <h2>SEMUA PELANGGARAN</h2>
-          <span className="table-count">128 records</span>
+          <span className="table-count">{events.length} records</span>
         </div>
         <div className="table-scroll">
           <table>
@@ -38,7 +41,7 @@ export default function ViolationsPage() {
               </tr>
             </thead>
             <tbody>
-              {predictionEvents.map((event) => (
+              {visibleEvents.map((event) => (
                 <tr key={event.id}>
                   <td>{event.time}</td>
                   <td>
@@ -51,6 +54,11 @@ export default function ViolationsPage() {
                   <td><button className="icon-button"><Icon name="image" /></button></td>
                 </tr>
               ))}
+              {visibleEvents.length === 0 && (
+                <tr>
+                  <td colSpan={6}>Belum ada log pelanggaran dari backend.</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

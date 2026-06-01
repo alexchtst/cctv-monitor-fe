@@ -1,14 +1,29 @@
-import { categoryBreakdown, predictionEvents, weeklyTrend } from "../dummy-data";
+import {
+  categoryBreakdown,
+  getBackendSnapshot,
+  newestEvents,
+  weeklyTrend,
+} from "../api-client";
 import { AppShell } from "../ui";
 
-export default function AnalyticsPage() {
+export default async function AnalyticsPage() {
+  const { events } = await getBackendSnapshot();
+  const latestEvents = newestEvents(events, 8);
+  const breakdown = categoryBreakdown(events);
+  const trend = weeklyTrend(events);
+  const averageConfidence = events.length
+    ? Math.round(events.reduce((sum, event) => sum + event.confidence, 0) / events.length)
+    : 0;
+  const sentNotifications = events.filter((event) => event.notification === "sent").length;
+  const highSeverity = events.filter((event) => event.severity === "high").length;
+
   return (
     <AppShell active="Analytics" searchPlaceholder="Cari metrik atau kamera...">
       <div className="screen-heading">
         <div>
           <p className="breadcrumb-lite">Analytics</p>
           <h1>Analitik Kepatuhan K3</h1>
-          <span>Dummy metrics untuk validasi UI sebelum data AI engine masuk.</span>
+          <span>Metrik langsung dari event prediksi hikonek-stream.</span>
         </div>
         <div className="segmented">
           <button>PEKAN INI</button>
@@ -19,17 +34,17 @@ export default function AnalyticsPage() {
       <div className="analytics-kpis">
         <section className="kpi-card">
           <p className="eyebrow">RATA-RATA CONFIDENCE</p>
-          <div className="kpi-value">91<span>%</span></div>
-          <p className="micro">Dari 128 prediksi hari ini</p>
+          <div className="kpi-value">{averageConfidence}<span>%</span></div>
+          <p className="micro">Dari {events.length} prediksi terbaru</p>
         </section>
         <section className="kpi-card">
           <p className="eyebrow">NOTIFIKASI TERKIRIM</p>
-          <div className="kpi-value">84</div>
-          <p className="micro">Email alert otomatis dummy</p>
+          <div className="kpi-value">{sentNotifications}</div>
+          <p className="micro">Email alert otomatis backend</p>
         </section>
         <section className="kpi-card">
           <p className="eyebrow">FALSE POSITIVE REVIEW</p>
-          <div className="kpi-value danger">7</div>
+          <div className="kpi-value danger">{highSeverity}</div>
           <p className="micro">Butuh validasi safety officer</p>
         </section>
       </div>
@@ -40,7 +55,7 @@ export default function AnalyticsPage() {
             <h2>TREN PREDIKSI AI</h2>
           </div>
           <div className="bar-chart tall">
-            {weeklyTrend.map((day, index) => (
+            {trend.map((day, index) => (
               <div className="bar-column" key={day.label}>
                 <span className={index === 4 ? "bar active" : "bar"} style={{ height: `${day.value}%` }} />
                 <small>{day.label}</small>
@@ -56,13 +71,13 @@ export default function AnalyticsPage() {
             <div className="donut">
               <div>
                 <span>TOTAL</span>
-                <strong>128</strong>
+                <strong>{events.length}</strong>
               </div>
             </div>
             <div className="legend-list">
-              {categoryBreakdown.map((item) => (
+              {breakdown.length > 0 ? breakdown.map((item) => (
                 <div key={item.label}><i className={item.color} />{item.label}<strong>{item.value}%</strong></div>
-              ))}
+              )) : <div><i className="navy" />Belum ada event<strong>0%</strong></div>}
             </div>
           </div>
         </section>
@@ -76,8 +91,8 @@ export default function AnalyticsPage() {
           {["Helmet Detector", "Mask Detector", "Smoke Classifier", "Restricted Area"].map((model, index) => (
             <div className="model-row" key={model}>
               <span>{model}</span>
-              <div><i style={{ width: `${[96, 88, 91, 84][index]}%` }} /></div>
-              <strong>{[96, 88, 91, 84][index]}%</strong>
+              <div><i style={{ width: `${[averageConfidence, averageConfidence, averageConfidence, averageConfidence][index]}%` }} /></div>
+              <strong>{averageConfidence}%</strong>
             </div>
           ))}
         </div>
@@ -90,7 +105,7 @@ export default function AnalyticsPage() {
         <div className="table-scroll">
           <table>
             <tbody>
-              {predictionEvents.map((event) => (
+              {latestEvents.map((event) => (
                 <tr key={event.id}>
                   <td>{event.time}</td>
                   <td><strong>{event.camera}</strong></td>
@@ -98,6 +113,11 @@ export default function AnalyticsPage() {
                   <td>{event.confidence}%</td>
                 </tr>
               ))}
+              {latestEvents.length === 0 && (
+                <tr>
+                  <td colSpan={4}>Belum ada sampel prediksi dari backend.</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

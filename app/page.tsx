@@ -1,14 +1,23 @@
 import Link from "next/link";
+import {
+  categoryBreakdown,
+  getBackendSnapshot,
+  newestEvents,
+  weeklyTrend,
+} from "./api-client";
 import { AppShell, Icon, StatusFeed } from "./ui";
 
-const violations = [
-  ["10:45 AM", "Gate 1 - Utama", "NO HELMET", "danger"],
-  ["10:32 AM", "Loading Dock B", "SMOKING", "neutral"],
-  ["10:15 AM", "Area Produksi 2", "NO MASK", "danger"],
-  ["09:58 AM", "Warehouse A", "NO HELMET", "danger"],
-];
+export default async function DashboardPage() {
+  const { cameras, events, health, online } = await getBackendSnapshot();
+  const activeCameras = cameras.filter((camera) => camera.status !== "offline").length;
+  const latestEvents = newestEvents(events, 4);
+  const breakdown = categoryBreakdown(events);
+  const trend = weeklyTrend(events);
+  const averageConfidence = events.length
+    ? Math.round(events.reduce((sum, event) => sum + event.confidence, 0) / events.length)
+    : 0;
+  const compliance = Math.max(0, 100 - Math.min(events.length, 100));
 
-export default function DashboardPage() {
   return (
     <AppShell active="Dashboard" searchPlaceholder="Cari Log atau Kamera...">
       <div className="dashboard-grid">
@@ -16,9 +25,9 @@ export default function DashboardPage() {
           <div>
             <p className="eyebrow">TINGKAT<br />KEPATUHAN K3</p>
             <div className="kpi-value">
-              94<span>%</span>
+              {compliance}<span>%</span>
             </div>
-            <p className="micro">↗ Target: 98% Bulan ini</p>
+            <p className="micro">{online ? "Target: 98% bulan ini" : "Backend belum terhubung"}</p>
           </div>
           <div className="shield-mark">
             <Icon name="shield" />
@@ -29,9 +38,9 @@ export default function DashboardPage() {
           <div className="kpi-split">
             <div>
               <p className="eyebrow">TOTAL<br />PELANGGARAN<br />HARI INI</p>
-              <div className="kpi-value danger">128</div>
+              <div className="kpi-value danger">{events.length}</div>
             </div>
-            <span className="change-badge">+12% DARI<br />KEMARIN</span>
+            <span className="change-badge">{averageConfidence}% AVG<br />CONFIDENCE</span>
           </div>
           <div className="risk-bars">
             <span />
@@ -44,11 +53,13 @@ export default function DashboardPage() {
           <p className="eyebrow">KAMERA AKTIF</p>
           <div className="camera-row">
             <div className="kpi-value">
-              18 <span>/ 20</span>
+              {activeCameras} <span>/ {cameras.length}</span>
             </div>
-            <span className="online-pill"><i /> ONLINE</span>
+            <span className="online-pill"><i /> {online ? "ONLINE" : "OFFLINE"}</span>
           </div>
-          <p className="micro">Downtime terdeteksi di: Warehouse B, Gate 4</p>
+          <p className="micro">
+            {health ? `${health.activeLoops} stream loop aktif, email ${health.emailEnabled ? "aktif" : "nonaktif"}` : "Jalankan hikonek-stream di port 8010"}
+          </p>
         </section>
       </div>
 
@@ -62,13 +73,17 @@ export default function DashboardPage() {
             <div className="donut" aria-label="Total pelanggaran 128">
               <div>
                 <span>TOTAL</span>
-                <strong>128</strong>
+                <strong>{events.length}</strong>
               </div>
             </div>
             <div className="legend-list">
-              <div><i className="navy" />Tanpa APD <strong>45%</strong></div>
-              <div><i className="tan" />Tanpa Masker <strong>30%</strong></div>
-              <div><i className="red" />Merokok <strong>25%</strong></div>
+              {breakdown.length > 0 ? (
+                breakdown.map((item) => (
+                  <div key={item.label}><i className={item.color} />{item.label}<strong>{item.value}%</strong></div>
+                ))
+              ) : (
+                <div><i className="navy" />Belum ada event <strong>0%</strong></div>
+              )}
             </div>
           </div>
         </section>
@@ -82,13 +97,13 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="bar-chart" aria-label="Tren pelanggaran mingguan">
-            {[52, 38, 67, 80, 86, 24, 20].map((height, index) => (
+            {trend.map((day, index) => (
               <div className="bar-column" key={index}>
                 <span
                   className={index === 4 ? "bar active" : "bar"}
-                  style={{ height: `${height}%` }}
+                  style={{ height: `${day.value}%` }}
                 />
-                <small>{["SEN", "SEL", "RAB", "KAM", "JUM", "SAB", "MIN"][index]}</small>
+                <small>{day.label}</small>
               </div>
             ))}
           </div>
@@ -111,19 +126,24 @@ export default function DashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {violations.map(([time, camera, type, tone]) => (
-                <tr key={`${time}-${camera}`}>
-                  <td>{time}</td>
-                  <td><strong>{camera}</strong></td>
-                  <td><span className={`tag ${tone}`}>{type}</span></td>
+              {latestEvents.map((event) => (
+                <tr key={event.id}>
+                  <td>{event.time}</td>
+                  <td><strong>{event.camera}</strong></td>
+                  <td><span className={`tag ${event.severity === "high" ? "danger" : "neutral"}`}>{event.type}</span></td>
                   <td><button className="icon-button"><Icon name="image" /></button></td>
                 </tr>
               ))}
+              {latestEvents.length === 0 && (
+                <tr>
+                  <td colSpan={4}>Belum ada pelanggaran dari backend.</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
         <div className="table-footer">
-          <span>Menampilkan 4 dari 128 pelanggaran hari ini</span>
+          <span>Menampilkan {latestEvents.length} dari {events.length} pelanggaran</span>
           <div>
             <button disabled>Previous</button>
             <button>Next</button>
